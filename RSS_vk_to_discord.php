@@ -8,25 +8,34 @@
 
 	// данные для соединения с базой даанных
 	define ("DBHOST", "localhost");
-	define ("DBNAME", "rssmsg");
-	define ("DBUSER", "rssmsg");
-	define ("DBPASS", "pass");
+	define ("DBNAME", "jinnd");
+	define ("DBUSER", "jinnd");
+	define ("DBPASS", "");
 
 	// токен от любого вк аккаута
-	define ("TOKENVK", "you_token");
+	define ("TOKENVK", "a319f4f47e29e33efcef7bc81defd33e6ec82c642f4b395ccbd2ecf76905cd6bf9e8b301c96610b5c0b6f");
 
-	// переменная-массив id пабликов ВК
-	define ("IDPUBVK", array ("57846937", "45745333", "132799222", "68674315", "22751485", "97494559"));
+	// конфиг разделов постинга
+	$section = [
 	
-	// имя дискорд бота (веб хука)
-	define ("NAMEBOT", "МЕМЫЧ");
-
-	// колличество последних записей для обработки на каждую RSS ленту 
-	define ("RSSMSGCOUNT", "3");
+		[
+		"name" => "memes", 
+		"name_bot" => "Мемыч",
+		"webhook" => "https://discordapp.com/api/webhooks/622669889638760449/icO8D0vmlzAryE7T2W_IcGAe4jbYYiGk1A7jAvDiRHmNlHLsLUjnvkQ0LaCJjWGrNmSd",
+		"pub_vk" => ["57846937","45745333","132799222","68674315","22751485","97494559"],
+		"rss_count_run" => 3
+		],
+		
+		[
+		"name"=>"porn", 
+		"name_bot" => "Порныч",
+		"webhook" => "https://discordapp.com/api/webhooks/622674475875434506/j5v9fiAtt4qLGeIBitp8krE1iZYUQbyzb5HECvt2xD6sVE7wQ68Z41kpOe6tgcya2SKt",
+		"pub_vk" => ["130040287","81804447","79049539"],
+		"rss_count_run" => 3
+		]
+		
+	];
 	
-	// вебхук дискорда
-	define ("WEBHOOKDISCORD", "https://discordapp.com/api/webhooks/");
-
 	// соединяемся с базой данных
 	$db = mysqli_connect(DBHOST, DBUSER, DBPASS, DBNAME);
 	// выводим отчет о соединении
@@ -40,35 +49,41 @@
 	}
 	
 // RSS формирование, подгрузка, анализ, обработка и запись нужных данных в дискорд по каждому элементу массива ВК пабликов
-for($i=0, $a_l=count(IDPUBVK); $i<$a_l; $i++) 
+
+//обработка всех разделов по порядку
+for($i=0, $a_l=count($section); $i<$a_l; $i++) 
 {   
- echo "Проход №" . $i . "</br>";
+ echo "<h2>Обработка раздела " . $section[$i]['name'] . "</h2></br>";
+ 
+ // обработка массива публиков раздела
+ for($j=0, $a_j=count($section[$i]['pub_vk']); $j<$a_j; $j++) 
+{  
  // формируем RSS ленту
- $rss[$i] = "https://vkapi.ga/functional/vk2rss/rss.php?access_token=" . TOKENVK . "&id=public" . IDPUBVK[$i] . "&count=" . RSSMSGCOUNT . "&include=&exclude=";
+ $rss[$j] = "https://vkapi.ga/functional/vk2rss/rss.php?access_token=" . TOKENVK . "&id=public" . $section[$i]['pub_vk'][$j] . "&count=" . $section[$i]['rss_count_run'] . "&include=&exclude=";
  
  // подгружаем содержимое RSS одной строкой 
- $rss[$i] = file_get_contents($rss[$i]);
+ $rss[$j] = file_get_contents($rss[$j]);
  
  // удаляем ненужные теги
- $rss[$i] = preg_replace_callback ("|(CDATA\[)(.+)(\]\])|imU",
+ $rss[$j] = preg_replace_callback ("|(CDATA\[)(.+)(\]\])|imU",
  function ($matches){
   $t1 = strip_tags($matches[2], "<img>");
   $t2 = preg_replace ("|(\<img src=')(.+)('\s*?/\>)|imU", "$2", $t1);
   $t3 = $matches[1] . $t2 . $matches[3];
   return $t3;
  }
- , $rss[$i]); 
+ , $rss[$j]); 
 
  // создаём объект из обработанной RSS ленты с доступом к каждому элементу встроенным средсвом
- $rss[$i] = new SimpleXMLElement($rss[$i]);
- $j=1;
+ $rss[$j] = new SimpleXMLElement($rss[$j]);
+ $x=1;
  
  // перебираем все элементы "item" содержащий в себе массив данных записей
  
- foreach ($rss[$i]->channel->item as $items) 
+ foreach ($rss[$j]->channel->item as $items) 
  {
-  echo "--Подпроход №" . $j . "</br>";
-  $j++; 
+  echo "--Подпроход №" . $x . "</br>";
+  $x++; 
   // делае запрос в базу данных и ищем соответсвия по ссылкам на посты
   if (!$sql = mysqli_query($db, "SELECT `link` FROM `msgdata` WHERE `link` = '{$items->link}'"))
   { 
@@ -87,7 +102,7 @@ for($i=0, $a_l=count(IDPUBVK); $i<$a_l; $i++)
   else // иначе
   { 
    // подгружаем классы для взаимодействия с вебхуками дискорда
-   $webhook = new Client(WEBHOOKDISCORD);
+   $webhook = new Client($section[$i]['webhook']);
    $embed = new Embed();
 	
    // проверка создания классов
@@ -116,7 +131,7 @@ for($i=0, $a_l=count(IDPUBVK); $i<$a_l; $i++)
    
    var_dump ($embed); // смотрим установку переменных поста
    
-   if ($webhook->username(NAMEBOT)) 
+   if ($webhook->username($section[$i]['name_bot']))
    { 
     echo "Имя бота установлено! </br>";
    }
@@ -156,6 +171,7 @@ HTML;
    $embed = NULL; 
   }
  }
+}
 }
  
 // закрываем соединение с базой данных
