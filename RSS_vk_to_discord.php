@@ -92,12 +92,11 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
  
   // определяем кол-во совпадений предыдущего пункта
   $c = mysqli_num_rows($sql);
-  echo "В базе найдено " . $c . " соответсвий!</br>";
  
   // если они есть , значит данный пост нужно скипать
   if ($c > 0)
   {
-   echo "<font color='red'>Найдено {$c} cхожих записей в базе с пабликом - {$items->author} и повторно добавлено не будет! </font><li><b>{$items->description}</b> </li></br>";
+   echo "<hr><font color='red'>Найдено {$c} cхожих записей в базе с пабликом - {$items->author} и повторно добавлено не будет! </font></br> {$items->title}</b></br><hr>";
   }
   else // иначе
   { 
@@ -111,19 +110,27 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
     die ("<h1>Не могу создать объекты классов взаимодействия с дискордом!<h1>");
    }
  
-   // если в посте есть изображения
-   if (preg_match_all("|https:\/\/[\d\w-]+\.userapi\.com\/[\w\d\/-]+\.jpg|im", $items->description, $post_link_img))
-   {   
-    // устанавливаем в качестве изображение первую ссылку
-    $embed->image((string)$post_link_img[0][0]);
+   // если пост содержит одно изображение
+   if (preg_match_all("|https:\/\/[\d\w-]+\.userapi\.com\/[\w\d\/-]+\.jpg|im", $items->description, $post_link_img) and ($cl = count($post_link_img[0])) == 1)
+   { 
+		// установить его в качестве изображения поста
+		$embed->image((string)$post_link_img[0][0]);
    }
- 
-   // если элемент Title не пуст , берём его за описание поста
-   if ((string)$items->title !== "[Без текста]")
-   {
-    $embed->description ((string)$items->title);
+   else {
+	   echo "Пост содержит " . $cl . " изображений и будет пропущен!</br><hr>";
+	   continue;
    }
- 
+
+	// если элемент Title не пуст , берём его за описание поста
+	if (($title = (string) $items->title) and ($title !== "[Без текста]"))
+	{  
+		$title = preg_replace("/[^ a-zа-яё\?\!\(\)-\d]/ui", "", $title);
+		$embed->description ($title);
+	}
+	else{
+		$title = NULL;
+	}
+
    // прочие установки
    $embed->title ((string)$items->author);
    $embed->url((string)$items->link);
@@ -152,18 +159,20 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
    }
    
    // записи ссылки и содержания поста в базу данных и вывод результата операций
-   if (mysqli_query($db, "INSERT INTO `msgdata` (`link`,`msg`) VALUES ('{$items->link}','{$items->description}')"))
+   if (mysqli_query($db, "INSERT INTO `msgdata` (`section`, `link`, `img`, `msg`) VALUES ('{$section[$i]['name']}', '{$items->link}', '{$post_link_img[0][0]}', '{$title}')"))
    {
     echo <<<HTML
-	<font color='green'>Запись с {$items->author} была успешно добавлена в базу и дискорд!</font>
-	<li><b>{$items->description}</b> </li></br>
+	<font color='green'>Запись с {$items->author} была успешно добавлена в базу!</font></br>
+	<b>	{$title}</b></br>
+	<b><img src='{$post_link_img[0][0]}' width='300'></b></br><hr>
 HTML;
    }
    else
    {
     echo <<<HTML
-	<b>Не удалось добавить запись с {$items->author} в базу и дискорд!!!!</b>
-	<li> {$items->description} </li></br>
+	<b>Не удалось добавить запись с {$items->author} в базу!!!!</b></br>
+	<b>	{$title}</b></br>
+	<img src='{$post_link_img[0][0]}' width='300'></br><hr>
 HTML;
    }
    // очистка созданных объектов взаимодействия с дискордом
