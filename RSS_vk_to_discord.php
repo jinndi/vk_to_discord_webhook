@@ -13,24 +13,28 @@
 	define ("DBPASS", "");
 
 	// токен от любого вк аккаута
-	define ("TOKENVK", "a319f4f47e29e33efcef7bc81defd33e6ec82c642f4b395ccbd2ecf76905cd6bf9e8b301c96610b5c0b6f");
+	define ("TOKENVK", "5667087db89cb4de7de8e6438bd0ade6a6e910c94989c1fb18e33d7a28a512a7d27dbfa40dddc8436a7de");
 
 	// конфиг разделов постинга
 	$section = [
 	
 		[
-		"name" => "memes", 
-		"name_bot" => "Мемыч",
-		"webhook" => "https://discordapp.com/api/webhooks/622669889638760449/icO8D0vmlzAryE7T2W_IcGAe4jbYYiGk1A7jAvDiRHmNlHLsLUjnvkQ0LaCJjWGrNmSd",
-		"pub_vk" => ["57846937","45745333","132799222","68674315","22751485","97494559"],
-		"rss_count_run" => 3
+		'name' => 'memes', // название категории , не изменять!
+		'avatar_link' => '',
+		'name_bot' => 'МЕМЫЧ',
+		'color' => '',
+		'webhook' => 'https://discordapp.com/api/webhooks/622669889638760449/icO8D0vmlzAryE7T2W_IcGAe4jbYYiGk1A7jAvDiRHmNlHLsLUjnvkQ0LaCJjWGrNmSd',
+		'pub_vk' => ["57846937","45745333","132799222","68674315","22751485","97494559"],
+		'rss_count_run' => 3
 		],
 		
 		[
-		"name"=>"porn", 
-		"name_bot" => "Порныч",
-		"webhook" => "https://discordapp.com/api/webhooks/622674475875434506/j5v9fiAtt4qLGeIBitp8krE1iZYUQbyzb5HECvt2xD6sVE7wQ68Z41kpOe6tgcya2SKt",
-		"pub_vk" => ["130040287","81804447","79049539"],
+		"name"=>"porn", // название категории , не изменять!
+		'avatar_link' => '',
+		"name_bot" => 'ПОРНЫЧ',
+		'color' => '',
+		"webhook" => 'https://discordapp.com/api/webhooks/622674475875434506/j5v9fiAtt4qLGeIBitp8krE1iZYUQbyzb5HECvt2xD6sVE7wQ68Z41kpOe6tgcya2SKt',
+		"pub_vk" => ["130040287","81804447","79049539", "78387512", "109051265", "51498882","65636693", "91921027"],
 		"rss_count_run" => 3
 		]
 		
@@ -38,6 +42,8 @@
 	
 	// соединяемся с базой данных
 	$db = mysqli_connect(DBHOST, DBUSER, DBPASS, DBNAME);
+	$db->set_charset('utf8mb4');
+	
 	// выводим отчет о соединении
 	if (!$db) 
 	{
@@ -64,11 +70,13 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
  // подгружаем содержимое RSS одной строкой 
  $rss[$j] = file_get_contents($rss[$j]);
  
+ 
+ 
  // удаляем ненужные теги
- $rss[$j] = preg_replace_callback ("|(CDATA\[)(.+)(\]\])|imU",
+ $rss[$j] = preg_replace_callback ("/(CDATA\[)(.+)(\]\])/imU",
  function ($matches){
   $t1 = strip_tags($matches[2], "<img>");
-  $t2 = preg_replace ("|(\<img src=')(.+)('\s*?/\>)|imU", "$2", $t1);
+ $t2 = preg_replace ("/(\<img src=')(.+)('\s*?\/\>)/imU", "$2", $t1);
   $t3 = $matches[1] . $t2 . $matches[3];
   return $t3;
  }
@@ -82,7 +90,7 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
  
  foreach ($rss[$j]->channel->item as $items) 
  {
-  echo "--Подпроход №" . $x . "</br>";
+  echo "--Грабим паблик - " . $items->author . " запись № " .$x . "</br>";
   $x++; 
   // делае запрос в базу данных и ищем соответсвия по ссылкам на посты
   if (!$sql = mysqli_query($db, "SELECT `link` FROM `msgdata` WHERE `link` = '{$items->link}'"))
@@ -92,12 +100,11 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
  
   // определяем кол-во совпадений предыдущего пункта
   $c = mysqli_num_rows($sql);
-  echo "В базе найдено " . $c . " соответсвий!</br>";
  
   // если они есть , значит данный пост нужно скипать
   if ($c > 0)
   {
-   echo "<font color='red'>Найдено {$c} cхожих записей в базе с пабликом - {$items->author} и повторно добавлено не будет! </font><li><b>{$items->description}</b> </li></br>";
+   echo "<font color='red'>Запись в базе существует и повторно добавлена не будет! </font></br> {$items->title}</b></br><hr>";
   }
   else // иначе
   { 
@@ -111,36 +118,66 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
     die ("<h1>Не могу создать объекты классов взаимодействия с дискордом!<h1>");
    }
  
-   // если в посте есть изображения
-   if (preg_match_all("|https:\/\/[\d\w-]+\.userapi\.com\/[\w\d\/-]+\.jpg|im", $items->description, $post_link_img))
-   {   
-    // устанавливаем в качестве изображение первую ссылку
-    $embed->image((string)$post_link_img[0][0]);
-   }
- 
-   // если элемент Title не пуст , берём его за описание поста
-   if ((string)$items->title !== "[Без текста]")
-   {
-    $embed->description ((string)$items->title);
-   }
- 
-   // прочие установки
-   $embed->title ((string)$items->author);
-   $embed->url((string)$items->link);
-   $embed->color ("#696969");
-   
-   var_dump ($embed); // смотрим установку переменных поста
-   
-   if ($webhook->username($section[$i]['name_bot']))
+   // если пост содержит одно изображение
+   if (preg_match_all("/https:\/\/[\d\w-]+\.userapi\.com\/[\w\d\/-]+\.jpg/im", $items->description, $post_link_img) and ($cl = count($post_link_img[0])) == 1)
    { 
-    echo "Имя бота установлено! </br>";
+		// установить его в качестве изображения поста
+		$embed->image((string)$post_link_img[0][0]);
    }
-   
-   if ($webhook->embed($embed)) 
-   { 
-    echo "Параметры поста иницилизированы! </br>";
+   else {
+	   echo "Пост содержит " . $cl . " изображений и будет пропущен!</br><hr>";
+	   continue;
    }
+
+	// если элемент Title не пуст , берём его за описание поста
+	if ((string) $items->title!== '[Без текста]')
+	{  
+		$description = (string)$items->description;
+		$description = preg_replace("/https:\/\/[\d\w-]+\.userapi\.com\/[\w\d\/-]+\.jpg/im", " ", $description);
+		$embed->description("***{$description}***");
+	}
+	else{
+		$description = NULL;
+	}
+	
+	// если задано в настройках название бота берем его
+	if (!empty($section[$i]['name_bot'])){
+		$webhook->username($section[$i]['name_bot']);
+	}
+	else { // иначе берем название паблика
+		$webhook->username((string)$items->author);
+	}
    
+	// если задана настройка аватара то выбрать её
+	if (!empty($section[$i]['avatar_link'])){
+		$webhook->avatar($section[$i]['avatar_link']);
+	}
+	else { // иначе аватар будер соответствующий изображения поста
+		$webhook->avatar((string)$post_link_img[0][0]);
+	}
+		
+	// если задана настройка цвета раздела то вырать цвет соответствующий
+	if (!empty($section[$i]['color'])){
+		$embed->color ($section[$i]['color']);
+	} 
+	else { // иначе цвет нандомный
+		$embed->color ('#' . dechex(rand(0,10000000)));
+	}
+   
+	// прочие установки
+	$embed->title ((string)$items->author);
+	$embed->url((string)$items->link);
+	$embed->timestamp(date("c"));
+
+	// var_dump ($embed); // смотрим установку переменных поста
+   
+	if ($webhook->embed($embed)) { 
+		echo "Параметры поста иницилизированы! </br>";
+	}
+	else {
+		echo "Ошибка иницилизации папаметров поста! </br>";
+	}
+
    // отправка массива полученных данных в  вебхук дискорда
    if ($webhook->send()) 
    { 
@@ -152,18 +189,20 @@ for($i=0, $a_l=count($section); $i<$a_l; $i++)
    }
    
    // записи ссылки и содержания поста в базу данных и вывод результата операций
-   if (mysqli_query($db, "INSERT INTO `msgdata` (`link`,`msg`) VALUES ('{$items->link}','{$items->description}')"))
+   if (mysqli_query($db, "INSERT INTO `msgdata` (`section`, `link`, `img`, `msg`) VALUES ('{$section[$i]['name']}', '{$items->link}', '{$post_link_img[0][0]}', '{$description}')"))
    {
     echo <<<HTML
-	<font color='green'>Запись с {$items->author} была успешно добавлена в базу и дискорд!</font>
-	<li><b>{$items->description}</b> </li></br>
+	<font color='green'>Запись с {$items->author} была успешно добавлена в базу!</font></br>
+	<b>	{$description}</b></br>
+	<b><img src='{$post_link_img[0][0]}' width='300'></b></br><hr>
 HTML;
    }
    else
    {
     echo <<<HTML
-	<b>Не удалось добавить запись с {$items->author} в базу и дискорд!!!!</b>
-	<li> {$items->description} </li></br>
+	<b>Не удалось добавить запись с {$items->author} в базу!!!!</b></br>
+	<b>	{$description}</b></br>
+	<img src='{$post_link_img[0][0]}' width='300'></br><hr>
 HTML;
    }
    // очистка созданных объектов взаимодействия с дискордом
